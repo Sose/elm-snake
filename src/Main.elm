@@ -1,10 +1,11 @@
 module Main exposing (..)
 
 import Browser
-import Browser.Events exposing (onAnimationFrameDelta)
+import Browser.Events exposing (onAnimationFrameDelta, onKeyDown)
 import Html exposing (..)
 import Html.Attributes exposing (..)
-import Html.Events exposing (onClick, onInput)
+import Html.Events exposing (onClick)
+import Json.Decode as Decode
 import Time
 
 
@@ -17,6 +18,7 @@ type Direction
     | Down
     | Left
     | Right
+    | Other
 
 
 type alias Snake =
@@ -34,6 +36,7 @@ type alias Model =
 
 type Msg
     = Tick Float
+    | KeyDown Direction
 
 
 addCoord : Coordinate -> Coordinate -> Coordinate
@@ -56,6 +59,9 @@ dirToDeltas d =
         Right ->
             ( 1, 0 )
 
+        _ ->
+            ( 0, 0 )
+
 
 updateInterval : Float
 updateInterval =
@@ -71,17 +77,28 @@ boardDimensions =
     ( 30, 20 )
 
 
-init : () -> ( Model, Cmd Msg )
-init _ =
-    ( { apple = ( 15, 15 )
-      , snake =
-            { direction = Right
-            , elems = [ ( 14, 10 ), ( 13, 10 ), ( 12, 10 ), ( 11, 10 ), ( 10, 10 ) ]
-            }
-      , timeSinceUpdate = 0
-      }
-    , Cmd.none
-    )
+keyDecoder : Decode.Decoder Msg
+keyDecoder =
+    Decode.map toDirection (Decode.field "key" Decode.string)
+
+
+toDirection : String -> Msg
+toDirection str =
+    case str of
+        "ArrowLeft" ->
+            KeyDown Left
+
+        "ArrowRight" ->
+            KeyDown Right
+
+        "ArrowUp" ->
+            KeyDown Up
+
+        "ArrowDown" ->
+            KeyDown Down
+
+        _ ->
+            KeyDown Other
 
 
 advanceSnake : Snake -> Snake
@@ -116,16 +133,61 @@ tick model t =
         { model | timeSinceUpdate = model.timeSinceUpdate + t }
 
 
+init : () -> ( Model, Cmd Msg )
+init _ =
+    ( { apple = ( 15, 15 )
+      , snake =
+            { direction = Right
+            , elems = [ ( 14, 10 ), ( 13, 10 ), ( 12, 10 ), ( 11, 10 ), ( 10, 10 ) ]
+            }
+      , timeSinceUpdate = 0
+      }
+    , Cmd.none
+    )
+
+
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         Tick t ->
             ( tick model t, Cmd.none )
 
+        KeyDown dir ->
+            let
+                allowedDir : Direction -> Direction -> Bool
+                allowedDir snakeDir d =
+                    case ( snakeDir, d ) of
+                        ( Left, Right ) ->
+                            False
+
+                        ( Right, Left ) ->
+                            False
+
+                        ( Up, Down ) ->
+                            False
+
+                        ( Down, Up ) ->
+                            False
+
+                        _ ->
+                            True
+
+                updatedSnake snake =
+                    if allowedDir snake.direction dir then
+                        { snake | direction = dir }
+
+                    else
+                        snake
+            in
+            ( { model | snake = updatedSnake model.snake }, Cmd.none )
+
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-    onAnimationFrameDelta Tick
+    Sub.batch
+        [ onAnimationFrameDelta Tick
+        , onKeyDown keyDecoder
+        ]
 
 
 view : Model -> Html Msg
