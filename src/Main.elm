@@ -10,6 +10,21 @@ import Random
 import Time
 
 
+type alias Config =
+    { updateInterval : Float
+    , cellDimensions : Coordinate
+    , boardDimensions : Coordinate
+    }
+
+
+config : Config
+config =
+    { updateInterval = 300
+    , cellDimensions = ( 20, 20 )
+    , boardDimensions = ( 30, 20 )
+    }
+
+
 type alias Coordinate =
     ( Int, Int )
 
@@ -19,7 +34,6 @@ type Direction
     | Down
     | Left
     | Right
-    | Other
 
 
 type alias Snake =
@@ -41,6 +55,7 @@ type Msg
     | KeyDown Direction
     | NewApple Coordinate
     | GameOver
+    | DoNothing
 
 
 eqCoord : Coordinate -> Coordinate -> Bool
@@ -68,24 +83,6 @@ dirToDeltas d =
         Right ->
             ( 1, 0 )
 
-        _ ->
-            ( 0, 0 )
-
-
-type alias Config =
-    { updateInterval : Float
-    , cellDimensions : Coordinate
-    , boardDimensions : Coordinate
-    }
-
-
-config : Config
-config =
-    { updateInterval = 500
-    , cellDimensions = ( 20, 20 )
-    , boardDimensions = ( 30, 20 )
-    }
-
 
 keyDecoder : Decode.Decoder Msg
 keyDecoder =
@@ -98,6 +95,17 @@ randomCoordinate ( maxX, maxY ) =
         (\x y -> ( x, y ))
         (Random.int 0 maxX)
         (Random.int 0 maxY)
+
+
+genApple =
+    let
+        maxX =
+            Tuple.first config.boardDimensions
+
+        maxY =
+            Tuple.second config.boardDimensions
+    in
+    Random.generate NewApple (randomCoordinate ( maxX, maxY ))
 
 
 toDirection : String -> Msg
@@ -116,7 +124,7 @@ toDirection str =
             KeyDown Down
 
         _ ->
-            KeyDown Other
+            DoNothing
 
 
 advanceSnake : Model -> ( Model, Cmd Msg )
@@ -177,7 +185,7 @@ advanceSnake model =
         cmd : Cmd Msg
         cmd =
             if hitApple then
-                Random.generate NewApple (randomCoordinate ( maxX, maxY ))
+                genApple
 
             else
                 Cmd.none
@@ -248,10 +256,17 @@ update msg model =
             ( { model | snake = updatedSnake model.snake }, Cmd.none )
 
         NewApple coords ->
-            ( { model | apple = coords }, Cmd.none )
+            if List.member coords model.snake.elems then
+                ( model, genApple )
+
+            else
+                ( { model | apple = coords }, Cmd.none )
 
         GameOver ->
             ( { model | running = False }, Cmd.none )
+
+        DoNothing ->
+            ( model, Cmd.none )
 
 
 subscriptions : Model -> Sub Msg
