@@ -1,9 +1,11 @@
 module Main exposing (..)
 
 import Browser
+import Browser.Events exposing (onAnimationFrameDelta)
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import Html.Events exposing (onClick, onInput)
+import Time
 
 
 type alias Coordinate =
@@ -26,11 +28,38 @@ type alias Snake =
 type alias Model =
     { apple : Coordinate
     , snake : Snake
+    , timeSinceUpdate : Float
     }
 
 
 type Msg
-    = ButtonClick
+    = Tick Float
+
+
+addCoord : Coordinate -> Coordinate -> Coordinate
+addCoord ( x1, y1 ) ( x2, y2 ) =
+    ( x1 + x2, y1 + y2 )
+
+
+dirToDeltas : Direction -> Coordinate
+dirToDeltas d =
+    case d of
+        Up ->
+            ( 0, -1 )
+
+        Down ->
+            ( 0, 1 )
+
+        Left ->
+            ( -1, 0 )
+
+        Right ->
+            ( 1, 0 )
+
+
+updateInterval : Float
+updateInterval =
+    700
 
 
 cellDimensions =
@@ -46,24 +75,57 @@ init : () -> ( Model, Cmd Msg )
 init _ =
     ( { apple = ( 15, 15 )
       , snake =
-            { direction = Left
-            , elems = [ ( 10, 10 ), ( 11, 10 ), ( 12, 10 ), ( 13, 10 ), ( 14, 10 ) ]
+            { direction = Right
+            , elems = [ ( 14, 10 ), ( 13, 10 ), ( 12, 10 ), ( 11, 10 ), ( 10, 10 ) ]
             }
+      , timeSinceUpdate = 0
       }
     , Cmd.none
     )
 
 
+advanceSnake : Snake -> Snake
+advanceSnake s =
+    let
+        oldHead =
+            case List.head s.elems of
+                Just x ->
+                    x
+
+                Nothing ->
+                    ( 0, 0 )
+
+        newHead =
+            addCoord oldHead (dirToDeltas s.direction)
+
+        len =
+            List.length s.elems
+
+        newElems =
+            newHead :: List.take (len - 1) s.elems
+    in
+    { s | elems = newElems }
+
+
+tick : Model -> Float -> Model
+tick model t =
+    if model.timeSinceUpdate + t >= updateInterval then
+        { model | timeSinceUpdate = 0, snake = advanceSnake model.snake }
+
+    else
+        { model | timeSinceUpdate = model.timeSinceUpdate + t }
+
+
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        ButtonClick ->
-            ( model, Cmd.none )
+        Tick t ->
+            ( tick model t, Cmd.none )
 
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-    Sub.none
+    onAnimationFrameDelta Tick
 
 
 view : Model -> Html Msg
