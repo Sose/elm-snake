@@ -32,6 +32,7 @@ type alias Model =
     { apple : Coordinate
     , snake : Snake
     , timeSinceUpdate : Float
+    , running : Bool
     }
 
 
@@ -39,6 +40,7 @@ type Msg
     = Tick Float
     | KeyDown Direction
     | NewApple Coordinate
+    | GameOver
 
 
 eqCoord : Coordinate -> Coordinate -> Bool
@@ -83,11 +85,6 @@ config =
     , cellDimensions = ( 20, 20 )
     , boardDimensions = ( 30, 20 )
     }
-
-
-randomPosition : Coordinate -> Coordinate
-randomPosition dimensions =
-    ( 5, 5 )
 
 
 keyDecoder : Decode.Decoder Msg
@@ -142,6 +139,28 @@ advanceSnake model =
         hitApple =
             eqCoord model.apple newHead
 
+        hitSelf =
+            List.member newHead s.elems
+
+        maxX =
+            Tuple.first config.boardDimensions
+
+        maxY =
+            Tuple.second config.boardDimensions
+
+        hitWall =
+            let
+                x =
+                    Tuple.first newHead
+
+                y =
+                    Tuple.second newHead
+            in
+            x < 0 || x > maxX || y < 0 || y > maxY
+
+        hitObstacle =
+            hitSelf || hitWall
+
         len =
             if hitApple then
                 List.length s.elems
@@ -155,33 +174,24 @@ advanceSnake model =
         updatedSnake snake =
             { snake | elems = newElems }
 
-        updatedApple =
-            if hitApple then
-                randomPosition config.boardDimensions
-
-            else
-                model.apple
-
+        cmd : Cmd Msg
         cmd =
             if hitApple then
-                let
-                    maxX =
-                        Tuple.first config.boardDimensions
-
-                    maxY =
-                        Tuple.second config.boardDimensions
-                in
                 Random.generate NewApple (randomCoordinate ( maxX, maxY ))
 
             else
                 Cmd.none
     in
-    ( { model | timeSinceUpdate = 0, snake = updatedSnake s, apple = updatedApple }, cmd )
+    if hitObstacle then
+        ( { model | running = False }, cmd )
+
+    else
+        ( { model | timeSinceUpdate = 0, snake = updatedSnake s }, cmd )
 
 
 tick : Model -> Float -> ( Model, Cmd Msg )
 tick model t =
-    if model.timeSinceUpdate + t >= config.updateInterval then
+    if model.running && model.timeSinceUpdate + t >= config.updateInterval then
         advanceSnake model
 
     else
@@ -196,6 +206,7 @@ init _ =
             , elems = [ ( 14, 10 ), ( 13, 10 ), ( 12, 10 ), ( 11, 10 ), ( 10, 10 ) ]
             }
       , timeSinceUpdate = 0
+      , running = True
       }
     , Cmd.none
     )
@@ -238,6 +249,9 @@ update msg model =
 
         NewApple coords ->
             ( { model | apple = coords }, Cmd.none )
+
+        GameOver ->
+            ( { model | running = False }, Cmd.none )
 
 
 subscriptions : Model -> Sub Msg
@@ -292,11 +306,20 @@ view model =
     in
     div
         [ style "background-color" "black"
+        , style "color" "white"
         , style "height" "80vh"
         , style "padding-left" "20px"
         , style "padding-top" "20px"
         ]
-        [ viewBoard ]
+        [ viewBoard
+        , div []
+            [ if model.running then
+                text ""
+
+              else
+                text "GAME OVER!"
+            ]
+        ]
 
 
 main =
